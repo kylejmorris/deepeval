@@ -1,5 +1,6 @@
 #!/usr/bin/env/python
 
+import sys
 import tensorflow as tf
 from io import BytesIO
 from picamera import PiCamera
@@ -22,7 +23,7 @@ def camera():
     return cam
 
 
-def model():
+def model(path):
     """Load the model."""
     pass  # TODO: Actually load the model.
 
@@ -75,7 +76,7 @@ def indicate(pred):
 if __name__ == "__main__":
     cam = camera()
     prox = proximity()
-    mod = model()
+    mod = model(sys.arg[1] if len(sys.argv) > 1 else "model.ckpt")
     ready()
     while True:
         wait(prox)
