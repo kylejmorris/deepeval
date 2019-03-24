@@ -1,0 +1,12 @@
+[Unit]
+Description=E-Val
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=3
+ExecStart=/home/pi/bin/e-val.sh
+
+[Install]
+WantedBy=default.target
