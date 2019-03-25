@@ -1,5 +1,7 @@
 #!/usr/bin/env/python
 
+import numpy as np
+import os
 import sys
 import tensorflow as tf
 from io import BytesIO
@@ -9,9 +11,10 @@ from time import sleep
 from VL53L0X import VL53L0X
 
 
-COOLDOWN = 5000
+COOLDOWN = 5
 IMAGE_BUFFER = BytesIO()
-DISTANCE_THRESHOLD = 1000
+SIZE = (224, 224)
+DISTANCE_RANGE = range(100, 1000)
 TRASH_LABEL = 5
 
 
@@ -25,7 +28,10 @@ def camera():
 
 def model(path):
     """Load the model."""
-    pass  # TODO: Actually load the model.
+    gd = tf.GraphDef()
+    with tf.gfile.FastGFile(path, "rb") as f:
+        gd.ParseFromString(f.read())
+    return tf.Session(), tf.import_graph_def(graph, return_elements=["final_output"])[0]
 
 
 def proximity():
@@ -43,22 +49,22 @@ def ready():
 
 def wait(prox):
     """Wait for an object to come near."""
-    while prox.get_distance() > DISTANCE_THRESHOLD:
-        sleep(1)
+    while prox.get_distance() not in DISTANCE_RANGE:
+        sleep(0.1)
 
 
 def capture(cam, buf):
     """Capture an image."""
-    cam.capture(buf, format="png")
+    cam.capture(buf, format="png", resize=SIZE)
     buf.seek(0)
-    img = Image.open(buf)
+    img = np.array(Image.open(buf).convert("RGB"), dtype=float)
     print("Captured image")
     return img
 
 
-def infer(mod, img):
+def infer(sess, op, img):
     """Run inference on an image."""
-    pass  # TODO: Run the model on the image.
+    return sess.run(op, img)
 
 
 def interpret(out):
@@ -76,12 +82,12 @@ def indicate(pred):
 if __name__ == "__main__":
     cam = camera()
     prox = proximity()
-    mod = model(sys.arg[1] if len(sys.argv) > 1 else "model.ckpt")
+    sess, op = model(sys.arg[1] if len(sys.argv) > 1 else expanduser("~/model.pb"))
     ready()
     while True:
         wait(prox)
         img = capture(cam, IMAGE_BUFFER)
-        out = infer(mod, img)
+        out = infer(sess, op, img)
         pred = interpret(out)
         indicate(pred)
         sleep(COOLDOWN)
