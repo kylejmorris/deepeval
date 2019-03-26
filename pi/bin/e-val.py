@@ -5,17 +5,18 @@ import os
 import sys
 import tensorflow as tf
 from io import BytesIO
+from os.path import expanduser
 from picamera import PiCamera
-from PIL import Image
-from time import sleep
+from time import sleep, time
 from VL53L0X import VL53L0X
 
 
 COOLDOWN = 5
-IMAGE_BUFFER = BytesIO()
 SIZE = (224, 224)
 DISTANCE_RANGE = range(100, 1000)
 TRASH_LABEL = 5
+INPUT_OP = "import/Placeholder"
+OUTPUT_OP = "import/final_result"
 
 
 def camera():
@@ -28,10 +29,13 @@ def camera():
 
 def model(path):
     """Load the model."""
+    g = tf.Graph()
     gd = tf.GraphDef()
-    with tf.gfile.FastGFile(path, "rb") as f:
+    with open(path, "rb") as f:
         gd.ParseFromString(f.read())
-    return tf.Session(), tf.import_graph_def(gd, return_elements=["final_output"])[0]
+    with g.as_default():
+        tf.import_graph_def(gd)
+    return g, g.get_operation_by_name(INPUT_OP), g.get_operation_by_name(OUTPUT_OP)
 
 
 def proximity():
@@ -53,23 +57,32 @@ def wait(prox):
         sleep(0.1)
 
 
-def capture(cam, buf):
+def capture(sess, cam):
     """Capture an image."""
-    cam.capture(buf, format="png", resize=SIZE)
+    buf = BytesIO()
+    cam.capture(buf, format="jpeg", resize=SIZE)
     buf.seek(0)
-    img = np.array(Image.open(buf).convert("RGB"), dtype=float)
+    img = tf.io.decode_jpeg(buf.read(), channels=3)
+    img = tf.cast(img, tf.float32)
+    img = tf.expand_dims(img, 0)
+    img = tf.image.resize_bilinear(img, list(SIZE))
+    # TODO: Do we need this?
+    # img = tf.divide(tf.subtract(img, [input_mean]), [input_std])
+    img = sess.run(img)
     print("Captured image")
     return img
 
 
-def infer(sess, op, img):
+def infer(sess, inp_op, out_op, img):
     """Run inference on an image."""
-    return sess.run(op, img)
+    pred = sess.run(out_op.outputs[0], {inp_op.outputs[0]: img})
+    print("Results: " + str(pred))
+    return pred
 
 
 def interpret(out):
     """Interpret an inference result."""
-    pred = out != TRASH_LABEL
+    pred = out.argmax() != TRASH_LABEL
     print("Prediction: " + str(pred))
     return pred
 
@@ -80,14 +93,23 @@ def indicate(pred):
 
 
 if __name__ == "__main__":
+    image_sess = tf.Session()
     cam = camera()
     prox = proximity()
-    sess, op = model(sys.arg[1] if len(sys.argv) > 1 else expanduser("~/model.pb"))
+    graph, inp_op, out_op = model(sys.arg[1] if len(sys.argv) > 1 else expanduser("~/model.pb"))
+    infer_sess = tf.Session(graph=graph)
+    # Warmup
+    capture(image_sess, cam)
+    infer(infer_sess, inp_op, out_op, img)
     ready()
+
     while True:
         wait(prox)
-        img = capture(cam, IMAGE_BUFFER)
-        out = infer(sess, op, img)
+        print("Received trigger")
+        start = time()
+        img = capture(image_sess, cam)
+        out = infer(infer_sess, inp_op, out_op, img)
         pred = interpret(out)
         indicate(pred)
+        print("Time: " + str(time() - start))
         sleep(COOLDOWN)
