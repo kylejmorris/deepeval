@@ -31,7 +31,7 @@ def model(path):
     gd = tf.GraphDef()
     with tf.gfile.FastGFile(path, "rb") as f:
         gd.ParseFromString(f.read())
-    return tf.Session(), tf.import_graph_def(graph, return_elements=["final_output"])[0]
+    return tf.Session(), tf.import_graph_def(gd, return_elements=["final_output"])[0]
 
 
 def proximity():
