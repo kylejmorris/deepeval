@@ -1,3 +1,15 @@
 [submodule "pi/VL53L0X_rasp_python"]
 	path = pi/VL53L0X_rasp_python
 	url = https://github.com/christopher-dG/VL53L0X_rasp_python
+[submodule "squeezeNet"]
+	path = squeezeNet
+	url = https://github.com/khushmeeet/squeezeNet.git
+[submodule "simdat"]
+	path = simdat
+	url = https://github.com/tammyyang/simdat.git
+[submodule "squeezenet"]
+	path = squeezenet
+	url = https://github.com/vonclites/squeezenet.git
+[submodule "models"]
+	path = models
+	url = https://github.com/tensorflow/models/
