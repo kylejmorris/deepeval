@@ -1,0 +1,21 @@
+These are general scripts you can use to train/evaluate models. 
+retrain will take a Tensorflow hub model, and you can save your fine tuned model locally.
+label_image.py will let you test out a model on local images.
+
+To train a new model use this command
+python retrain.py --image_dir /IMAGE_DIR --output_graph /deepeval/models --tfhub_module MODULE_URL
+
+To evaluate a model on a test image, use the below command:
+python label_image.py
+--graph=/saved_models/MODEL_NAME_graph.pb
+--labels=/trash_labels.txt
+--input_layer=Placeholder
+--output_layer=final_result
+--image=/tmp/testing_images/IMAGE_CLASS/IMAGE_NAME
+
+
+Some supported examples
+Finetune on resnet:
+python retrain.py --image_dir /deepeval/dataset-resized --output_graph /deepeval/finetuned_models/resnet_v2_50.pb --tfhub_module https://tfhub.dev/google/imagenet/resnet_v2_50/feature_vector/1
+Run classification on fine tuned resnet
+python label_image.py --graph=/deepeval/finetuned_models/resnet_v2_50.pb --labels=/deepeval/trashnet_labels.txt --input_layer=Placeholder --output_layer=final_result --image=/deepeval/testing_images/glass/0.jpeg --input_height 224 --input_width 224
