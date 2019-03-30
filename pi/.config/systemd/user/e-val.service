@@ -6,6 +6,7 @@ Type=simple
 Restart=on-failure
 RestartSec=3
 TimeoutStartSec=3
+Environment="LOG_FILE=/home/pi/log/e-val.log"
 ExecStart=/home/pi/bin/e-val.sh
 
 [Install]
