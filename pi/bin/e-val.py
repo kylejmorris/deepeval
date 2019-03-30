@@ -8,15 +8,18 @@ import tensorflow as tf
 from io import BytesIO
 from os.path import expanduser
 from picamera import PiCamera
-from time import sleep, time
+from time import ctime, sleep, time
 from VL53L0X import VL53L0X
 
 
+CLASSES = ["cardboard", "glass", "metal", "paper", "plastic", "trash"]
+TRASH_LABEL = CLASSES.index("trash")
 LOG_FILE = os.environ["LOG_FILE"]
 COOLDOWN = 3
 SIZE = (224, 224)
+INPUT_MEAN = 0
+INPUT_STD = 255
 DISTANCE_RANGE = range(100, 1000)
-TRASH_LABEL = 5
 INPUT_OP = "import/Placeholder"
 OUTPUT_OP = "import/final_result"
 
@@ -28,9 +31,11 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger("e-val")
 
+
 def camera():
     """Load the camera."""
     cam = PiCamera()
+    cam.resolution = SIZE
     cam.start_preview(alpha=128)
     LOGGER.info("Loaded camera")
     return cam
@@ -68,15 +73,12 @@ def wait(prox):
 
 def capture(sess, cam):
     """Capture an image."""
-    buf = BytesIO()
-    cam.capture(buf, format="jpeg", resize=SIZE)
-    buf.seek(0)
-    img = tf.io.decode_jpeg(buf.read(), channels=3)
+    # cam.capture(expanduser("~/captures/") + ctime() + ".jpeg")
+    img = np.empty((*SIZE, 3), dtype=np.uint8)
+    cam.capture(img, format="jpeg")
     img = tf.cast(img, tf.float32)
     img = tf.expand_dims(img, 0)
-    img = tf.image.resize_bilinear(img, list(SIZE))
-    # TODO: Do we need this?
-    # img = tf.divide(tf.subtract(img, [input_mean]), [input_std])
+    img = tf.divide(tf.subtract(img, [INPUT_MEAN]), [INPUT_STD])
     img = sess.run(img)
     LOGGER.info("Captured image")
     return img
@@ -84,16 +86,18 @@ def capture(sess, cam):
 
 def infer(sess, inp_op, out_op, img):
     """Run inference on an image."""
-    pred = sess.run(out_op.outputs[0], {inp_op.outputs[0]: img})
-    LOGGER.info("Results: " + str(pred))
-    return pred
+    pred = sess.run(out_op.outputs[0], {inp_op.outputs[0]: img})[0]
+    mapping = {CLASSES[i]: pred[i] for i in range(len(CLASSES))}
+    LOGGER.info("Results: " + str(mapping))
+    return mapping
 
 
 def interpret(out):
     """Interpret an inference result."""
-    pred = out.argmax() != TRASH_LABEL
+    mapping = np.array([out[CLASSES[i]] for i in range(len(CLASSES))])
+    pred = CLASSES[mapping.argmax()]
     LOGGER.info("Prediction: " + str(pred))
-    return pred
+    return mapping.argmax() != TRASH_LABEL
 
 
 def indicate(pred):
@@ -105,7 +109,7 @@ if __name__ == "__main__":
     image_sess = tf.Session()
     cam = camera()
     prox = proximity()
-    graph, inp_op, out_op = model(sys.arg[1] if len(sys.argv) > 1 else expanduser("~/model.pb"))
+    graph, inp_op, out_op = model(sys.argv[1] if len(sys.argv) > 1 else expanduser("~/model.pb"))
     infer_sess = tf.Session(graph=graph)
     # Warmup
     img = capture(image_sess, cam)
